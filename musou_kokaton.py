@@ -126,6 +126,7 @@ class Bomb(pg.sprite.Sprite):
         self.rect.centerx = emy.rect.centerx
         self.rect.centery = emy.rect.centery+emy.rect.height//2
         self.speed = 6
+        self.state = "active"  # 爆弾の状態：activeまたはinactive
 
     def update(self):
         """
@@ -241,6 +242,30 @@ class Score:
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)
 
+class EMP:
+    """
+    電磁パルスに関するクラス
+    """
+    def __init__(self, emys: pg.sprite.Group, bombs: pg.sprite.Group, screen: pg.Surface):
+        """
+        敵機と爆弾を無効化し，画面全体に半透明の黄色い矩形を0.05秒表示する
+        引数1 emys：敵機のGroup
+        引数2 bombs：爆弾のGroup
+        引数3 screen：画面Surface
+        """
+        for emy in emys:
+            emy.interval = math.inf  # 爆弾を投下できなくする
+            emy.image = pg.transform.laplacian(emy.image)  # 見た目をラプラシアンフィルタにする
+            emy.image.set_colorkey((0, 0, 0))
+        for bomb in bombs:
+            bomb.speed /= 2  # 動きを遅くする
+            bomb.state = "inactive"  # 起爆しない状態にする
+        img = pg.Surface((WIDTH, HEIGHT))
+        pg.draw.rect(img, (255, 255, 0), (0, 0, WIDTH, HEIGHT))
+        img.set_alpha(128)
+        screen.blit(img, [0, 0])
+        pg.display.update()
+        time.sleep(0.05)
 
 def main():
     pg.display.set_caption("真！こうかとん無双")
@@ -263,6 +288,9 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_e and score.value > 20:
+                EMP(emys, bombs, screen)  # 電磁パルスを発動
+                score.value -= 20  # 消費スコア20
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -283,6 +311,8 @@ def main():
             score.value += 1  # 1点アップ
 
         for bomb in pg.sprite.spritecollide(bird, bombs, True):  # こうかとんと衝突した爆弾リスト
+            if bomb.state == "inactive":  # 無効化された爆弾は起爆せずに消滅する
+                continue
             bird.change_img(8, screen)  # こうかとん悲しみエフェクト
             score.update(screen)
             pg.display.update()
